@@ -1,0 +1,15 @@
+name: gaussian_splatting
+channels:
+  - main
+  - nvidia
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip=26.1.1
+  - pytorch=2.3.1
+  - torchvision=0.15.2
+  - torchaudio=2.3.1
+  - tqdm
+  - plyfile=1.1

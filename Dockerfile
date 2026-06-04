@@ -45,10 +45,48 @@ RUN git clone --depth 1 --branch ${COLMAP_VERSION} https://github.com/colmap/col
     ninja install
 
 
-FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS base
+FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS build-pip-modules
 ARG CUDA_VERSION
 
-COPY --from=colmap /colmap-install /usr/local
+COPY --from=miniconda /opt/conda /opt/conda
+
+ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS=true \
+    CONDA_OVERRIDE_CUDA=${CUDA_VERSION} \
+    DEBIAN_FRONTEND=noninteractive \
+    PATH=/opt/conda/bin:$PATH \
+    CUDA_HOME=/usr/local/cuda \
+    TORCH_CUDA_ARCH_LIST=5.2
+
+RUN conda install -n base conda-libmamba-solver && \
+    conda config --set solver libmamba
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        cmake \
+        git \
+        ninja-build \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY build-environment.yml environment.yml
+RUN conda env create --file environment.yml
+
+RUN mkdir -p /opt/build-artifacts && \
+    git clone --recursive https://github.com/nannigalaxy/video-3d-reconstruction-gsplat.git /tmp/video-3d-reconstruction-gsplat
+
+RUN export PYBIND11_INCLUDE_DIR="$(conda run -n gaussian_splatting python -c 'import pybind11; print(pybind11.get_include())')" && \
+    export CPLUS_INCLUDE_PATH="$PYBIND11_INCLUDE_DIR:$CPLUS_INCLUDE_PATH" && \
+    export CPATH="$PYBIND11_INCLUDE_DIR:$CPATH" && \
+    conda run --no-capture-output -n gaussian_splatting pip wheel --no-build-isolation --wheel-dir /opt/build-artifacts \
+      /tmp/video-3d-reconstruction-gsplat/speedy-splat/submodules/diff-gaussian-rasterization \
+      /tmp/video-3d-reconstruction-gsplat/speedy-splat/submodules/simple-knn
+
+
+FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION} AS base
+ARG CUDA_VERSION
+
 COPY --from=miniconda /opt/conda /opt/conda
 
 VOLUME /input
@@ -64,13 +102,12 @@ ENV FPS=30 \
     # TORCH_CUDA_ARCH_LIST=8.6;8.0;7.5;7.0;6.0;5.2;5.0
     # PATH=/opt/conda/bin:$CUDA_HOME/bin:$PATH \
     # LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
-
+    
 RUN conda install -n base conda-libmamba-solver && \
-    conda config --set solver libmamba
+conda config --set solver libmamba
     
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        build-essential \        
         ffmpeg \
         git \
         libboost-program-options1.74.0 \
@@ -79,9 +116,7 @@ RUN apt-get update && \
         libopengl0 \
         libmetis5 \
         libceres2 \
-        libopenimageio2.2 \
         libfreeimage3 \
-        libgcc-s1 \
         libgl1 \
         libglew2.2 \
         libgoogle-glog0v5 \
@@ -89,31 +124,22 @@ RUN apt-get update && \
         libqt5gui5 \
         libqt5widgets5 \
         libqt5svg5 \
-        libcurl4 \
-        libssl3 \
-        libmkl-locale \
-        libmkl-intel-lp64 \
-        libmkl-intel-thread \
-        libmkl-core \
-        ninja-build \
-        wget \
     && apt-get autoremove -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-    
-    
-COPY environment.yml environment.yml
+
+
+COPY runtime-environment.yml environment.yml
 RUN conda env create --file environment.yml
 
-RUN git clone --recursive https://github.com/nannigalaxy/video-3d-reconstruction-gsplat.git /opt/video-3d-reconstruction-gsplat
+RUN git clone --depth 1 https://github.com/nannigalaxy/video-3d-reconstruction-gsplat.git /opt/video-3d-reconstruction-gsplat
 WORKDIR /opt/video-3d-reconstruction-gsplat
+RUN git submodule update --depth 1 speedy-splat/
 
-RUN export PYBIND11_INCLUDE_DIR="$(conda run -n gaussian_splatting python -c 'import pybind11; print(pybind11.get_include())')" && \
-    export CPLUS_INCLUDE_PATH="$PYBIND11_INCLUDE_DIR:$CPLUS_INCLUDE_PATH" && \
-    export CPATH="$PYBIND11_INCLUDE_DIR:$CPATH" && \
-    conda run --no-capture-output -n gaussian_splatting pip install --no-build-isolation \
-      ./speedy-splat/submodules/diff-gaussian-rasterization \
-      ./speedy-splat/submodules/simple-knn
+COPY --from=build-pip-modules /opt/build-artifacts /opt/build-artifacts
+RUN conda run --no-capture-output -n gaussian_splatting pip install --no-index --no-deps /opt/build-artifacts/*.whl
+
+COPY --from=colmap /colmap-install /usr/local
 
 ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "gaussian_splatting"]
 CMD ./video_to_gsplat.sh ${FPS} /input /output/sfm_output /output/gsplat_output
