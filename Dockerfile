@@ -78,4 +78,4 @@ RUN export PYBIND11_INCLUDE_DIR="$(conda run -n gaussian_splatting python -c 'im
       ./speedy-splat/submodules/simple-knn
 
 ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "gaussian_splatting"]
-CMD ["./video_to_gsplat.sh", "${FPS}", "/input", "/output/sfm_output", "/output/gsplat_output"]
+CMD ./video_to_gsplat.sh ${FPS} /input /output/sfm_output /output/gsplat_output
