@@ -1,15 +1,54 @@
 ARG CUDA_VERSION=11.8.0
 ARG UBUNTU_VERSION=22.04
-ARG COLMAP_VERSION=20260427.6785
+ARG COLMAP_VERSION=3.8
 ARG MINICONDA_VERSION=26.3.2
 
-FROM colmap/colmap:${COLMAP_VERSION} AS colmap
 FROM continuumio/miniconda3:${MINICONDA_VERSION} AS miniconda
+
+
+FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS colmap
+ARG COLMAP_VERSION
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+        git \
+        cmake \
+        ninja-build \
+        build-essential \
+        libboost-program-options-dev \
+        libboost-filesystem-dev \
+        libboost-graph-dev \
+        libboost-system-dev \
+        libboost-test-dev \
+        libeigen3-dev \
+        libflann-dev \
+        libfreeimage-dev \
+        libmetis-dev \
+        libgoogle-glog-dev \
+        libgflags-dev \
+        libsqlite3-dev \
+        libglew-dev \
+        qtbase5-dev \
+        libqt5opengl5-dev \
+        libcgal-dev \
+        libceres-dev \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 --branch ${COLMAP_VERSION} https://github.com/colmap/colmap.git && \
+    mkdir -p colmap/build && \
+    cd colmap/build && \
+    cmake .. -GNinja -DCMAKE_CUDA_ARCHITECTURES=52 -DCMAKE_INSTALL_PREFIX=/colmap-install && \
+    ninja && \
+    ninja install
+
 
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS base
 ARG CUDA_VERSION
 
-COPY --from=colmap /usr/local /usr/local
+COPY --from=colmap /colmap-install /usr/local
 COPY --from=miniconda /opt/conda /opt/conda
 
 VOLUME /input
@@ -41,15 +80,15 @@ RUN apt-get update && \
         libmetis5 \
         libceres2 \
         libopenimageio2.2 \
+        libfreeimage3 \
         libgcc-s1 \
         libgl1 \
         libglew2.2 \
         libgoogle-glog0v5 \
-        libqt6core6 \
-        libqt6gui6 \
-        libqt6widgets6 \
-        libqt6openglwidgets6 \
-        libqt6svg6 \
+        libqt5core5a \
+        libqt5gui5 \
+        libqt5widgets5 \
+        libqt5svg5 \
         libcurl4 \
         libssl3 \
         libmkl-locale \
@@ -69,7 +108,6 @@ RUN conda env create --file environment.yml
 RUN git clone --recursive https://github.com/nannigalaxy/video-3d-reconstruction-gsplat.git /opt/video-3d-reconstruction-gsplat
 WORKDIR /opt/video-3d-reconstruction-gsplat
 
-# RUN conda run --no-capture-output -n gaussian_splatting pip install --no-build-isolation ./speedy-splat/submodules/diff-gaussian-rasterization ./speedy-splat/submodules/simple-knn
 RUN export PYBIND11_INCLUDE_DIR="$(conda run -n gaussian_splatting python -c 'import pybind11; print(pybind11.get_include())')" && \
     export CPLUS_INCLUDE_PATH="$PYBIND11_INCLUDE_DIR:$CPLUS_INCLUDE_PATH" && \
     export CPATH="$PYBIND11_INCLUDE_DIR:$CPATH" && \
