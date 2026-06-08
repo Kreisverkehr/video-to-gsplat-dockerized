@@ -2,12 +2,14 @@ ARG CUDA_VERSION=11.8.0
 ARG UBUNTU_VERSION=22.04
 ARG COLMAP_VERSION=3.8
 ARG MINICONDA_VERSION=26.3.2
+ARG CUDA_ARCH_LIST="8.6;8.0;7.5;7.0;6.0;5.2;5.0"
 
 FROM continuumio/miniconda3:${MINICONDA_VERSION} AS miniconda
 
 
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS colmap
 ARG COLMAP_VERSION
+ARG CUDA_ARCH_LIST
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -40,13 +42,15 @@ RUN apt-get update && apt-get install -y \
 RUN git clone --depth 1 --branch ${COLMAP_VERSION} https://github.com/colmap/colmap.git && \
     mkdir -p colmap/build && \
     cd colmap/build && \
-    cmake .. -GNinja -DCMAKE_CUDA_ARCHITECTURES=52 -DCMAKE_INSTALL_PREFIX=/colmap-install && \
+    CMAKE_CUDA_ARCHITECTURES="$(echo ${CUDA_ARCH_LIST} | tr -d '.')" && \
+    cmake .. -GNinja -DCMAKE_CUDA_ARCHITECTURES="$CMAKE_CUDA_ARCHITECTURES" -DCMAKE_INSTALL_PREFIX=/colmap-install && \
     ninja && \
     ninja install
 
 
-FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS build-pip-modules
+FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS pip-builder
 ARG CUDA_VERSION
+ARG CUDA_ARCH_LIST
 
 COPY --from=miniconda /opt/conda /opt/conda
 
@@ -55,7 +59,7 @@ ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS=true \
     DEBIAN_FRONTEND=noninteractive \
     PATH=/opt/conda/bin:$PATH \
     CUDA_HOME=/usr/local/cuda \
-    TORCH_CUDA_ARCH_LIST=5.2
+    TORCH_CUDA_ARCH_LIST=${CUDA_ARCH_LIST}
 
 RUN conda install -n base conda-libmamba-solver && \
     conda config --set solver libmamba
@@ -76,16 +80,25 @@ RUN conda env create --file environment.yml
 RUN mkdir -p /opt/build-artifacts && \
     git clone --recursive https://github.com/nannigalaxy/video-3d-reconstruction-gsplat.git /tmp/video-3d-reconstruction-gsplat
 
+FROM pip-builder AS diff-gaussian-rasterization-builder
 RUN export PYBIND11_INCLUDE_DIR="$(conda run -n gaussian_splatting python -c 'import pybind11; print(pybind11.get_include())')" && \
     export CPLUS_INCLUDE_PATH="$PYBIND11_INCLUDE_DIR:$CPLUS_INCLUDE_PATH" && \
     export CPATH="$PYBIND11_INCLUDE_DIR:$CPATH" && \
     conda run --no-capture-output -n gaussian_splatting pip wheel --no-build-isolation --wheel-dir /opt/build-artifacts \
-      /tmp/video-3d-reconstruction-gsplat/speedy-splat/submodules/diff-gaussian-rasterization \
+      /tmp/video-3d-reconstruction-gsplat/speedy-splat/submodules/diff-gaussian-rasterization
+
+
+FROM pip-builder AS simple-knn-builder
+RUN export PYBIND11_INCLUDE_DIR="$(conda run -n gaussian_splatting python -c 'import pybind11; print(pybind11.get_include())')" && \
+    export CPLUS_INCLUDE_PATH="$PYBIND11_INCLUDE_DIR:$CPLUS_INCLUDE_PATH" && \
+    export CPATH="$PYBIND11_INCLUDE_DIR:$CPATH" && \
+    conda run --no-capture-output -n gaussian_splatting pip wheel --no-build-isolation --wheel-dir /opt/build-artifacts \
       /tmp/video-3d-reconstruction-gsplat/speedy-splat/submodules/simple-knn
 
 
 FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION} AS base
 ARG CUDA_VERSION
+ARG CUDA_ARCH_LIST
 
 COPY --from=miniconda /opt/conda /opt/conda
 
@@ -98,10 +111,7 @@ ENV FPS=30 \
     DEBIAN_FRONTEND=noninteractive \
     PATH=/opt/conda/bin:$PATH \
     CUDA_HOME=/usr/local/cuda \
-    TORCH_CUDA_ARCH_LIST=5.2
-    # TORCH_CUDA_ARCH_LIST=8.6;8.0;7.5;7.0;6.0;5.2;5.0
-    # PATH=/opt/conda/bin:$CUDA_HOME/bin:$PATH \
-    # LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+    TORCH_CUDA_ARCH_LIST=${CUDA_ARCH_LIST}
     
 RUN conda install -n base conda-libmamba-solver && \
 conda config --set solver libmamba
@@ -136,7 +146,8 @@ RUN git clone --depth 1 https://github.com/nannigalaxy/video-3d-reconstruction-g
 WORKDIR /opt/video-3d-reconstruction-gsplat
 RUN git submodule update --depth 1 speedy-splat/
 
-COPY --from=build-pip-modules /opt/build-artifacts /opt/build-artifacts
+COPY --from=diff-gaussian-rasterization-builder /opt/build-artifacts /opt/build-artifacts
+COPY --from=simple-knn-builder /opt/build-artifacts /opt/build-artifacts
 RUN conda run --no-capture-output -n gaussian_splatting pip install --no-index --no-deps /opt/build-artifacts/*.whl
 
 COPY --from=colmap /colmap-install /usr/local
