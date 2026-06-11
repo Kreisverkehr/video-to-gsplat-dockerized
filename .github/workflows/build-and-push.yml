@@ -1,0 +1,62 @@
+name: Build and push Docker image to GHCR
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Prepare image name and tags (lowercase repo)
+        id: prepare
+        run: |
+          # Lowercase repository (Docker/ghcr requires lowercase names)
+          repo=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_NAME="ghcr.io/$repo"
+          # Extract tag name (strip refs/tags/ and optional leading v)
+          RAW_TAG=${GITHUB_REF#refs/tags/}
+          TAG=${RAW_TAG#v}
+
+          # Parse semver components
+          MAJOR=$(echo "$TAG" | cut -d. -f1)
+          MINOR=$(echo "$TAG" | cut -d. -f2)
+          PATCH=$(echo "$TAG" | cut -d. -f3)
+
+          # Compose tag list: latest, major, major.minor, full
+          TAGS="${IMAGE_NAME}:latest,${IMAGE_NAME}:${MAJOR},${IMAGE_NAME}:${MAJOR}.${MINOR},${IMAGE_NAME}:${TAG}"
+
+          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          echo "MAJOR=$MAJOR" >> $GITHUB_ENV
+          echo "MINOR=$MINOR" >> $GITHUB_ENV
+          echo "PATCH=$PATCH" >> $GITHUB_ENV
+          echo "TAGS=$TAGS" >> $GITHUB_ENV
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ env.TAGS }}
