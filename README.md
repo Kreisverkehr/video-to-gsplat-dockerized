@@ -13,13 +13,13 @@ The original project by Nannigalaxy converts video files into 3D models using Ga
 To use this Docker container, run the following command:
 
 ```bash
-docker run -v /path/to/input/file.mp4:/input -v /path/to/output:/output video-to-gsplat:latest
+docker run -v /path/to/input/file.mp4:/input -v /path/to/output:/output ghcr.io/kreisverkehr/video-to-gsplat:latest
 ```
 
 ### Example
 
 ```bash
-docker run -v C:\Users\YourUsername\Videos\sample.mp4:/input -v C:\Users\YourUsername\output:/output video-to-gsplat:latest
+docker run -v C:\Users\YourUsername\Videos\sample.mp4:/input -v C:\Users\YourUsername\output:/output ghcr.io/kreisverkehr/video-to-gsplat:latest
 ```
 
 ### Volumes
