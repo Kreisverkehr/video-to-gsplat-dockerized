@@ -102,10 +102,9 @@ ARG CUDA_ARCH_LIST
 
 COPY --from=miniconda /opt/conda /opt/conda
 
-VOLUME /input
-VOLUME /output
-
 ENV FPS=30 \
+    INPUT_FILE=/workspace/input/video \
+    OUTPUT_DIR=/workspace/output \
     CONDA_PLUGINS_AUTO_ACCEPT_TOS=true \
     CONDA_OVERRIDE_CUDA=${CUDA_VERSION} \
     DEBIAN_FRONTEND=noninteractive \
@@ -153,4 +152,4 @@ RUN conda run --no-capture-output -n gaussian_splatting pip install --no-index -
 COPY --from=colmap /colmap-install /usr/local
 
 ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "gaussian_splatting"]
-CMD ./video_to_gsplat.sh ${FPS} /input /output/sfm_output /output/gsplat_output
+CMD ./video_to_gsplat.sh ${FPS} ${INPUT_FILE} ${OUTPUT_DIR}/sfm_output ${OUTPUT_DIR}/gsplat_output

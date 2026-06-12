@@ -10,22 +10,46 @@ The original project by Nannigalaxy converts video files into 3D models using Ga
 
 ## Usage
 
-To use this Docker container, run the following command:
+This image runs the `video_to_gsplat.sh` script inside a Conda environment by default.
+
+Key defaults set in the container:
+
+- `FPS=30`
+- `INPUT_FILE=/workspace/input/video`
+- `OUTPUT_DIR=/workspace/output`
+
+The container expects the input file and output directory to be mounted under `/workspace` in the container. A typical `docker run` invocation looks like this:
 
 ```bash
-docker run -v /path/to/input/file.mp4:/input -v /path/to/output:/output ghcr.io/kreisverkehr/video-to-gsplat:latest
+docker run --gpus all \
+	-v /path/to/myvideo.mp4:/workspace/input/video \
+	-v /path/to/output:/workspace/output \
+	ghcr.io/kreisverkehr/video-to-gsplat:latest
 ```
 
-### Example
+Windows example (PowerShell):
+
+```powershell
+docker run --gpus all `
+	-v C:\Users\YourUsername\Videos\sample.mp4:/workspace/input/video `
+	-v C:\Users\YourUsername\output:/workspace/output `
+	ghcr.io/kreisverkehr/video-to-gsplat:latest
+```
+
+Override defaults with environment variables. Examples:
 
 ```bash
-docker run -v C:\Users\YourUsername\Videos\sample.mp4:/input -v C:\Users\YourUsername\output:/output ghcr.io/kreisverkehr/video-to-gsplat:latest
+# change FPS
+docker run --gpus all -e FPS=24 -v /video.mp4:/workspace/input/video -v /out:/workspace/output ghcr.io/kreisverkehr/video-to-gsplat:latest
+
+# use a different input filename inside the mounted folder
+docker run --gpus all -e INPUT_FILE=/workspace/input/myclip.mp4 -v /path/to:/workspace ghcr.io/kreisverkehr/video-to-gsplat:latest
 ```
 
-### Volumes
+## Volumes
 
-- **`/input`**: Mount your input video file here. The container will read the video from this file.
-- **`/output`**: Mount an output directory here. The container will write all generated 3D reconstruction files to this location.
+- Mount the input video file into the container at `/workspace/input/video`.
+- Mount an output directory at `/workspace/output` where the container will write `sfm_output` and `gsplat_output` subdirectories.
 
 ## Building the Docker Image
 
