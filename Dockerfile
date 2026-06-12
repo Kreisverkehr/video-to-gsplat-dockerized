@@ -55,6 +55,7 @@ ARG CUDA_ARCH_LIST
 COPY --from=miniconda /opt/conda /opt/conda
 
 ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS=true \
+    CONDA_NO_PROGRESS_BARS=1 \
     CONDA_OVERRIDE_CUDA=${CUDA_VERSION} \
     DEBIAN_FRONTEND=noninteractive \
     PATH=/opt/conda/bin:$PATH \
