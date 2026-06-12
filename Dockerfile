@@ -55,7 +55,6 @@ ARG CUDA_ARCH_LIST
 COPY --from=miniconda /opt/conda /opt/conda
 
 ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS=true \
-    CONDA_NO_PROGRESS_BARS=1 \
     CONDA_OVERRIDE_CUDA=${CUDA_VERSION} \
     DEBIAN_FRONTEND=noninteractive \
     PATH=/opt/conda/bin:$PATH \
@@ -63,7 +62,7 @@ ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS=true \
     TORCH_CUDA_ARCH_LIST=${CUDA_ARCH_LIST}
 
 RUN conda install -n base conda-libmamba-solver && \
-    conda config --set solver libmamba
+    conda config -q --set solver libmamba
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -76,7 +75,7 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 COPY build-environment.yml environment.yml
-RUN conda env create --file environment.yml
+RUN conda env create -q --file environment.yml
 
 RUN mkdir -p /opt/build-artifacts && \
     git clone --recursive https://github.com/nannigalaxy/video-3d-reconstruction-gsplat.git /tmp/video-3d-reconstruction-gsplat
@@ -107,7 +106,6 @@ ENV FPS=30 \
     INPUT_FILE=/workspace/input/video \
     OUTPUT_DIR=/workspace/output \
     CONDA_PLUGINS_AUTO_ACCEPT_TOS=true \
-    CONDA_NO_PROGRESS_BARS=1 \
     CONDA_OVERRIDE_CUDA=${CUDA_VERSION} \
     DEBIAN_FRONTEND=noninteractive \
     PATH=/opt/conda/bin:$PATH \
@@ -115,7 +113,7 @@ ENV FPS=30 \
     TORCH_CUDA_ARCH_LIST=${CUDA_ARCH_LIST}
     
 RUN conda install -n base conda-libmamba-solver && \
-conda config --set solver libmamba
+conda config -q --set solver libmamba
     
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -141,7 +139,7 @@ RUN apt-get update && \
 
 
 COPY runtime-environment.yml environment.yml
-RUN conda env create --file environment.yml
+RUN conda env create -q --file environment.yml
 
 RUN git clone --depth 1 https://github.com/nannigalaxy/video-3d-reconstruction-gsplat.git /opt/video-3d-reconstruction-gsplat
 WORKDIR /opt/video-3d-reconstruction-gsplat
