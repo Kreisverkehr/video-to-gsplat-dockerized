@@ -61,7 +61,7 @@ ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS=true \
     CUDA_HOME=/usr/local/cuda \
     TORCH_CUDA_ARCH_LIST=${CUDA_ARCH_LIST}
 
-RUN conda install -n base conda-libmamba-solver && \
+RUN conda install -q -n base conda-libmamba-solver && \
     conda config -q --set solver libmamba
 
 RUN apt-get update && \
@@ -112,7 +112,7 @@ ENV FPS=30 \
     CUDA_HOME=/usr/local/cuda \
     TORCH_CUDA_ARCH_LIST=${CUDA_ARCH_LIST}
     
-RUN conda install -n base conda-libmamba-solver && \
+RUN conda install -q -n base conda-libmamba-solver && \
 conda config -q --set solver libmamba
     
 RUN apt-get update && \
