@@ -16,12 +16,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
       - name: Prepare image name and tags (lowercase repo)
         id: prepare
         run: |
@@ -54,9 +48,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push image
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: ${{ env.TAGS }}
+      - name: Build image with Docker
+        run: |
+          echo "Building Docker image with tags: ${TAGS}"
+          tags=$(echo "${TAGS}" | tr ',' ' ')
+          docker build $(printf ' -t %s' $tags) .
+
+      - name: Push Docker image tags
+        run: |
+          echo "Pushing Docker image tags: ${TAGS}"
+          for tag in $(echo "${TAGS}" | tr ',' '\n'); do
+            docker push "$tag"
+          done
